@@ -1,15 +1,151 @@
-import { useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Puck, useGetPuck } from "@measured/puck";
 import "@measured/puck/puck.css";
 import { config } from "./config.jsx";
+import api from "../api/axios.js";
+import { useParams } from "react-router-dom";
 
 // ─── EMPTY data for a brand new page ─────────────────────────────────────────
 const EMPTY_DATA = { content: [], root: { props: {} } };
+
+function DrawerCapture({ children, drawerRef, onReady }) {
+  useEffect(() => {
+    drawerRef.current = children;
+    onReady();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [children]);
+  return null;
+}
+
+function Tabs({ active, setActive }) {
+  const tabs = ["Blocks", "Style", "Theme"];
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 6,
+        padding: 10,
+        borderBottom: "1px solid #e5e7eb",
+      }}
+    >
+      {tabs.map((t) => (
+        <button
+          key={t}
+          onClick={() => setActive(t)}
+          style={{
+            padding: "8px 10px",
+            borderRadius: 10,
+            border: `1px solid ${active === t ? "#c7d2fe" : "#e5e7eb"}`,
+            background: active === t ? "#eef2ff" : "#fff",
+            color: active === t ? "#3730a3" : "#374151",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            flex: 1,
+          }}
+        >
+          {t}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ThemePanel({ theme, setTheme, customCss, setCustomCss, onMetaChange }) {
+  const [draftCss, setDraftCss] = useState(customCss || "");
+
+  useEffect(() => {
+    setDraftCss(customCss || "");
+  }, [customCss]);
+
+  const set = (k, v) => {
+    setTheme((prev) => ({ ...(prev || {}), [k]: v }));
+    onMetaChange();
+  };
+
+  return (
+    <div style={{ padding: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: "#111827", marginBottom: 10 }}>
+        Theme
+      </div>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>Primary color</span>
+          <input
+            type="color"
+            value={theme?.primaryColor || "#4f46e5"}
+            onChange={(e) => set("primaryColor", e.target.value)}
+            style={{ width: 52, height: 34, padding: 2, border: "1px solid #e5e7eb", borderRadius: 10 }}
+          />
+        </label>
+
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>Font family</span>
+          <input
+            value={theme?.fontFamily || ""}
+            onChange={(e) => set("fontFamily", e.target.value)}
+            placeholder="Inter, system-ui, sans-serif"
+            style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 12, outline: "none" }}
+          />
+        </label>
+
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>Base background</span>
+          <input
+            type="color"
+            value={theme?.baseBg || "#ffffff"}
+            onChange={(e) => set("baseBg", e.target.value)}
+            style={{ width: 52, height: 34, padding: 2, border: "1px solid #e5e7eb", borderRadius: 10 }}
+          />
+        </label>
+
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>Base text color</span>
+          <input
+            type="color"
+            value={theme?.baseText || "#111827"}
+            onChange={(e) => set("baseText", e.target.value)}
+            style={{ width: 52, height: 34, padding: 2, border: "1px solid #e5e7eb", borderRadius: 10 }}
+          />
+        </label>
+      </div>
+
+      <div style={{ marginTop: 14, fontSize: 12, fontWeight: 800, color: "#111827" }}>Custom CSS</div>
+      <textarea
+        value={draftCss}
+        onChange={(e) => setDraftCss(e.target.value)}
+        onBlur={() => {
+          if (draftCss !== customCss) {
+            setCustomCss(draftCss);
+            onMetaChange();
+          }
+        }}
+        placeholder={`/* Example */\n.hero-title { font-size: 48px; }`}
+        style={{
+          marginTop: 8,
+          width: "100%",
+          minHeight: 180,
+          resize: "vertical",
+          padding: 10,
+          borderRadius: 12,
+          border: "1px solid #e5e7eb",
+          fontSize: 12,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          outline: "none",
+          background: "#0b1220",
+          color: "#e5e7eb",
+        }}
+      />
+    </div>
+  );
+}
 
 // ─── Custom Header (inside Puck tree so useGetPuck works) ─────────────────────
 function CustomHeader({
   slug, setSlug, publishState, hasChanges,
   errorMsg, onPublish, onSlugChange, onLoad, loadState,
+  title, setTitle, status, setStatus, onMetaChange,
 }) {
   const getPuck = useGetPuck();
 
@@ -40,7 +176,6 @@ function CustomHeader({
       boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       width: "100%", boxSizing: "border-box",
     }}>
-
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <div style={{
@@ -54,11 +189,20 @@ function CustomHeader({
 
       <div style={{ width: 1, height: 24, background: "#e5e7eb", flexShrink: 0 }} />
 
-      {/* Slug Input + Load Button */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 440 }}>
-        <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 500, whiteSpace: "nowrap" }}>
-          Page Slug
-        </label>
+      {/* Title + Slug + Load */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 760 }}>
+        <input
+          type="text"
+          placeholder="Page title"
+          value={title}
+          onChange={(e) => { setTitle(e.target.value); onMetaChange(); }}
+          style={{
+            width: 220, padding: "6px 10px",
+            border: "1px solid #d1d5db", borderRadius: 8,
+            fontSize: 13, color: "#111827", background: "#f9fafb",
+          }}
+        />
+        <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 500, whiteSpace: "nowrap" }}>Slug</label>
         <div style={{ position: "relative", flex: 1 }}>
           <span style={{
             position: "absolute", left: 10, top: "50%",
@@ -92,14 +236,12 @@ function CustomHeader({
               e.target.style.boxShadow = "none";
               e.target.style.background = "#f9fafb";
             }}
-            // ✅ Press Enter to load the page
             onKeyDown={(e) => {
               if (e.key === "Enter" && slug.trim()) onLoad(slug.trim());
             }}
           />
         </div>
 
-        {/* ✅ Load/Edit button — fetches existing page data */}
         <button
           onClick={() => { if (slug.trim()) onLoad(slug.trim()); }}
           disabled={!slug.trim() || loadState === "loading"}
@@ -126,6 +268,26 @@ function CustomHeader({
         >
           {loadState === "loading" ? "Loading…" : "Load Page"}
         </button>
+
+        {/* ✅ FIX 2: status select drives the parent state directly */}
+        <select
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            onMetaChange();
+          }}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: "1px solid #d1d5db",
+            background: "#f9fafb",
+            fontSize: 13,
+            color: "#374151",
+          }}
+        >
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+        </select>
       </div>
 
       {/* Load status messages */}
@@ -151,9 +313,7 @@ function CustomHeader({
         </div>
       )}
       {loadState === "error" && (
-        <span style={{ fontSize: 12, color: "#dc2626", flexShrink: 0 }}>
-          Failed to load
-        </span>
+        <span style={{ fontSize: 12, color: "#dc2626", flexShrink: 0 }}>Failed to load</span>
       )}
 
       <div style={{ flex: 1 }} />
@@ -173,9 +333,7 @@ function CustomHeader({
 
       {/* Inline publish error */}
       {publishState === "error" && errorMsg && (
-        <span style={{ fontSize: 12, color: "#dc2626", maxWidth: 200, flexShrink: 0 }}>
-          {errorMsg}
-        </span>
+        <span style={{ fontSize: 12, color: "#dc2626", maxWidth: 200, flexShrink: 0 }}>{errorMsg}</span>
       )}
 
       {/* Publish Button */}
@@ -208,16 +366,30 @@ function CustomHeader({
 
 // ─── Main Editor ─────────────────────────────────────────────────────────────
 export default function PuckEditor() {
+  const params = useParams();
   const [slug, setSlug]                 = useState("");
-  const [puckData, setPuckData]         = useState(EMPTY_DATA); // ✅ loaded page data
+  const [title, setTitle]               = useState("");
+  const [status, setStatus]             = useState("draft");
+  const [customCss, setCustomCss]       = useState("");
+  const [theme, setTheme]               = useState({
+    primaryColor: "#4f46e5",
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+    baseBg: "#ffffff",
+    baseText: "#111827",
+  });
+
+  const [puckData, setPuckData]         = useState(EMPTY_DATA);
+  const [editorKey, setEditorKey]       = useState("init");
+
   const [publishState, setPublishState] = useState("idle");
   const [hasChanges, setHasChanges]     = useState(false);
   const [errorMsg, setErrorMsg]         = useState("");
   const [loadState, setLoadState]       = useState("idle");
-  // "idle" | "loading" | "found" | "not_found" | "error"
+  const [sidebarTab, setSidebarTab]     = useState("Blocks");
+  const drawerRef  = useRef(null);
+  const [drawerReady, setDrawerReady]   = useState(false);
 
   const handleSlugChange = useCallback(() => {
-    // Slug changed — reset load state, don't mark as unsaved
     setLoadState("idle");
     setPublishState("idle");
   }, []);
@@ -227,71 +399,294 @@ export default function PuckEditor() {
     setPublishState((prev) => (prev === "saved" ? "idle" : prev));
   }, []);
 
-  // ✅ Load existing page from backend by slug
+  const handleMetaChange = useCallback(() => {
+    setHasChanges(true);
+    setPublishState((prev) => (prev === "saved" ? "idle" : prev));
+  }, []);
+
+  const parseMaybeJson = (raw) => {
+    if (typeof raw === "string") {
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+    return raw;
+  };
+
+  const normalizeLoadedPayload = (json) => {
+    const payload = json?.data || json?.page || json || {};
+    const rawContent =
+      payload?.content ?? json?.content ?? json?.data?.content ?? json?.page?.content;
+    const parsedContent = parseMaybeJson(rawContent) || EMPTY_DATA;
+    const embeddedMeta  = parsedContent?.root?.props?.__cmsMeta || {};
+
+    return {
+      data: parsedContent,
+      meta: {
+        title:     payload?.title     || json?.title     || embeddedMeta?.title     || "",
+        status:   (payload?.status    || json?.status    || embeddedMeta?.status    || "draft").toLowerCase(),
+        customCss: payload?.customCss || json?.customCss || embeddedMeta?.customCss || "",
+        theme:     payload?.theme     || json?.theme     || embeddedMeta?.theme     || null,
+      },
+    };
+  };
+
+  const withMetaEmbedded = (data, currentStatus) => {
+    const safeData = data || EMPTY_DATA;
+    return {
+      ...safeData,
+      root: {
+        ...(safeData.root || {}),
+        props: {
+          ...((safeData.root && safeData.root.props) || {}),
+          __cmsMeta: {
+            title:     title     || "",
+            // ✅ FIX 2: Accept currentStatus parameter so the value is never stale
+            status:    currentStatus || status || "draft",
+            customCss: customCss || "",
+            theme:     theme     || null,
+          },
+        },
+      },
+    };
+  };
+
   const handleLoad = useCallback(async (pageSlug) => {
     setLoadState("loading");
     try {
-      const res = await fetch(`http://localhost:5000/api/page/${pageSlug}`);
+      const res    = await api.get(`/api/page/page/${pageSlug}`);
+      const loaded = normalizeLoadedPayload(res.data);
 
-      if (res.status === 404) {
-        // Page doesn't exist yet — start fresh
-        setPuckData(EMPTY_DATA);
-        setLoadState("not_found");
-        setHasChanges(false);
-        setPublishState("idle");
-        return;
+      const freshData = loaded.data || EMPTY_DATA;
+
+      // ✅ FIX 1: Set puckData first, THEN change the key so Puck remounts
+      // with the correct data already in state.
+      setPuckData(freshData);
+      setTitle(loaded.meta.title || "");
+      setStatus(loaded.meta.status || "draft");
+      setCustomCss(loaded.meta.customCss || "");
+      if (loaded.meta.theme) {
+        setTheme((prev) => ({ ...(prev || {}), ...(loaded.meta.theme || {}) }));
       }
-
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-
-      const json = await res.json();
-      // ✅ Pass the saved Puck data back into the editor
-      // Your backend should return { content: data } where data is the Puck Data object
-      setPuckData(json.content || EMPTY_DATA);
       setLoadState("found");
       setHasChanges(false);
       setPublishState("idle");
+
+      // Bump the editor key AFTER all state is applied so Puck re-initialises
+      // with the fully-loaded data, not the previous stale data.
+      setEditorKey(`${pageSlug}-${Date.now()}`);
+
     } catch (err) {
+      const httpStatus = err?.response?.status;
+      if (httpStatus === 404) {
+        setPuckData(EMPTY_DATA);
+        setTitle("");
+        setStatus("draft");
+        setCustomCss("");
+        setTheme({
+          primaryColor: "#4f46e5",
+          fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+          baseBg: "#ffffff",
+          baseText: "#111827",
+        });
+        setLoadState("not_found");
+        setHasChanges(false);
+        setPublishState("idle");
+        setEditorKey(`${pageSlug}-new-${Date.now()}`);
+        return;
+      }
       setLoadState("error");
       console.error("Load error:", err);
     }
   }, []);
 
+  useEffect(() => {
+    const routeSlug = (params?.slug || "").toString().trim();
+    if (!routeSlug) return;
+    setSlug(routeSlug);
+    handleLoad(routeSlug);
+  }, [params?.slug, handleLoad]);
+
+  useEffect(() => {
+    if (!title?.trim()) return;
+    document.title = `${title} | CMS`;
+  }, [title]);
+
+  // ✅ FIX 2: handlePublish now receives the live status value directly
+  // from the caller (via the ref pattern below) so it is never stale.
+  const statusRef = useRef(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
+
   const handlePublish = useCallback(async (data) => {
     if (!slug.trim()) return;
     setPublishState("saving");
     setErrorMsg("");
+
+    // Read the latest status from the ref — not the closure value.
+    const currentStatus = statusRef.current;
+
     try {
-      const res = await fetch("http://localhost:5000/api/page", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: slug.trim(), content: data }),
-      });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const payload = {
+        slug:      slug.trim(),
+        title:     title.trim() || slug.trim(),
+        // ✅ FIX 2: Always use the current (ref-read) status value
+        status:    currentStatus,
+        customCss,
+        theme,
+        content:   withMetaEmbedded(data, currentStatus),
+      };
+      await api.post("/api/page/page", payload);
       setPublishState("saved");
       setHasChanges(false);
     } catch (err) {
       setPublishState("error");
-      setErrorMsg(err.message || "Failed to publish. Try again.");
+      setErrorMsg(
+        err?.response?.data?.message || err?.message || "Failed to publish. Try again.",
+      );
     }
-  }, [slug]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, title, customCss, theme]);
 
-  // ✅ useMemo keeps overrides stable — prevents header remount on state change
-  const overrides = useMemo(() => ({
-    header: () => (
-      <CustomHeader
-        slug={slug}
-        setSlug={setSlug}
-        publishState={publishState}
-        hasChanges={hasChanges}
-        errorMsg={errorMsg}
-        loadState={loadState}
-        onPublish={handlePublish}
-        onSlugChange={handleSlugChange}
-        onLoad={handleLoad}
-      />
-    ),
-  }), [slug, publishState, hasChanges, errorMsg, loadState, handlePublish, handleSlugChange, handleLoad]);
+  const overrides = useMemo(
+    () => ({
+      header: () => (
+        <CustomHeader
+          slug={slug}
+          setSlug={setSlug}
+          title={title}
+          setTitle={setTitle}
+          status={status}
+          setStatus={setStatus}
+          publishState={publishState}
+          hasChanges={hasChanges}
+          errorMsg={errorMsg}
+          loadState={loadState}
+          onPublish={handlePublish}
+          onSlugChange={handleSlugChange}
+          onLoad={handleLoad}
+          onMetaChange={handleMetaChange}
+        />
+      ),
+      drawer: ({ children }) => (
+        <DrawerCapture
+          drawerRef={drawerRef}
+          onReady={() => setDrawerReady((prev) => (prev ? prev : true))}
+        >
+          {children}
+        </DrawerCapture>
+      ),
+      fields: ({ children }) => (
+        <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          <Tabs active={sidebarTab} setActive={setSidebarTab} />
+          <div style={{ flex: 1, overflow: "auto" }}>
+            {sidebarTab === "Blocks" ? (
+              <div className="cms-blocks-grid" style={{ padding: 10, background: "#f8fafc" }}>
+                <style>{`
+                  .cms-blocks-grid ul,
+                  .cms-blocks-grid [role="list"],
+                  .cms-blocks-grid .puck-drawer-items {
+                    display: grid !important;
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 12px;
+                    align-items: stretch;
+                  }
+                  .cms-blocks-grid li { list-style: none; margin: 0; padding: 0; }
+                  .cms-blocks-grid li > button,
+                  .cms-blocks-grid .puck-component-list-item,
+                  .cms-blocks-grid [role="listitem"] > button {
+                    width: 100%;
+                    min-height: 96px;
+                    padding: 14px 10px;
+                    display: flex !important;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 10px;
+                    text-align: center;
+                    border-radius: 16px;
+                    border: 1px solid #e2e8f0;
+                    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+                    transition: all 0.18s ease;
+                    cursor: pointer;
+                  }
+                  .cms-blocks-grid li > button:hover,
+                  .cms-blocks-grid .puck-component-list-item:hover,
+                  .cms-blocks-grid [role="listitem"] > button:hover {
+                    transform: translateY(-2px);
+                    border-color: #c7d2fe;
+                    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.12);
+                    background: #ffffff;
+                  }
+                  .cms-blocks-grid li > button:focus-visible,
+                  .cms-blocks-grid .puck-component-list-item:focus-visible,
+                  .cms-blocks-grid [role="listitem"] > button:focus-visible {
+                    outline: 2px solid #4f46e5;
+                    outline-offset: 2px;
+                  }
+                  @media (max-width: 1100px) {
+                    .cms-blocks-grid ul,
+                    .cms-blocks-grid [role="list"],
+                    .cms-blocks-grid .puck-drawer-items {
+                      grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                  }
+                  @media (max-width: 720px) {
+                    .cms-blocks-grid ul,
+                    .cms-blocks-grid [role="list"],
+                    .cms-blocks-grid .puck-drawer-items {
+                      grid-template-columns: repeat(1, minmax(0, 1fr));
+                    }
+                  }
+                `}</style>
+                {drawerReady ? drawerRef.current : null}
+              </div>
+            ) : sidebarTab === "Style" ? (
+              <div>{children}</div>
+            ) : (
+              <ThemePanel
+                theme={theme}
+                setTheme={setTheme}
+                customCss={customCss}
+                setCustomCss={setCustomCss}
+                onMetaChange={handleMetaChange}
+              />
+            )}
+          </div>
+        </div>
+      ),
+      iframe: ({ children, document }) => {
+        useEffect(() => {
+          if (!document) return;
+          const css = `
+            :root {
+              --cms-primary: ${theme?.primaryColor || "#4f46e5"};
+              --cms-bg: ${theme?.baseBg || "#ffffff"};
+              --cms-text: ${theme?.baseText || "#111827"};
+            }
+            body {
+              background: var(--cms-bg);
+              color: var(--cms-text);
+              font-family: ${theme?.fontFamily || "Inter, system-ui, sans-serif"};
+            }
+            a { color: var(--cms-primary); }
+            ${customCss || ""}
+          `;
+          let styleEl = document.getElementById("__cms_theme_style");
+          if (!styleEl) {
+            styleEl = document.createElement("style");
+            styleEl.id = "__cms_theme_style";
+            document.head.appendChild(styleEl);
+          }
+          styleEl.textContent = css;
+        }, [document, theme, customCss]);
+        return <>{children}</>;
+      },
+    }),
+    [
+      slug, title, status, publishState, hasChanges, errorMsg, loadState,
+      handlePublish, handleSlugChange, handleLoad, handleMetaChange,
+      sidebarTab, drawerReady, customCss, theme,
+    ],
+  );
 
   return (
     <div style={{
@@ -299,13 +694,17 @@ export default function PuckEditor() {
       fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
     }}>
       <div style={{ flex: 1, overflow: "hidden" }}>
+        {customCss?.trim() && <style>{customCss}</style>}
+        {/* ✅ FIX 1: key is now editorKey (not slug+loadState).
+            editorKey only changes AFTER puckData is fully updated,
+            so Puck always mounts with the correct loaded data. */}
         <Puck
           config={config}
-          data={puckData}        // ✅ driven by state — updates when page is loaded
+          data={puckData}
           onChange={handleChange}
           onPublish={handlePublish}
           overrides={overrides}
-          key={slug + loadState} // ✅ remount Puck only when a different page is loaded
+          key={editorKey}
         />
       </div>
 

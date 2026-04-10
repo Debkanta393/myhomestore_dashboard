@@ -9,6 +9,17 @@ import { useParams, useNavigate } from "react-router";
 import { useDispatch } from "react-redux";
 import { uploadProduct, getProductById, updateProduct } from "../features/product/product";
 
+function normalizeProductFromApi(payload) {
+  const body = payload?.data ?? payload;
+  const raw =
+    body?.products ??
+    body?.product ??
+    body?.data?.products ??
+    body?.data?.product;
+  if (Array.isArray(raw)) return raw[0] ?? null;
+  return raw ?? null;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 const EMPTY_FORM = {
   // Basic
@@ -58,6 +69,8 @@ const UploadProduct = () => {
   const [functionsImagePreview,  setFunctionsImagePreview]  = useState([]);
   const [removedProductImages,   setRemovedProductImages]   = useState([]);
   const [removedFunctionsImages, setRemovedFunctionsImages] = useState([]);
+  const [productImageUrl,        setProductImageUrl]        = useState("");
+  const [functionsImageUrl,      setFunctionsImageUrl]      = useState("");
   const [specificationFields,    setSpecificationFields]    = useState([{ id: Date.now(), key: "", value: "" }]);
   const [featureFields,          setFeatureFields]          = useState([{ id: Date.now(), icon: "", title: "", description: "" }]);
   const [loading,   setLoading]   = useState(false);
@@ -73,10 +86,42 @@ const UploadProduct = () => {
     const fetchProduct = async () => {
       setFetching(true);
       try {
-        const res     = await dispatch(getProductById(id));
-        const p       = res?.payload?.data?.products;
-        console.log(p)
+        const res = await dispatch(getProductById(id));
+        console.log(res)
+        if (getProductById.rejected.match(res)) {
+          throw new Error(
+            typeof res.payload === "string"
+              ? res.payload
+              : res.payload?.message || "Failed to load product",
+          );
+        }
+        const p = normalizeProductFromApi(res.payload);
         if (!p) throw new Error("Product not found");
+
+        const parseArray = (val) => {
+          if (!val) return [];
+        
+          if (Array.isArray(val)) {
+            if (val.length === 1 && typeof val[0] === "string") {
+              try {
+                return JSON.parse(val[0]);
+              } catch {
+                return val;
+              }
+            }
+            return val;
+          }
+        
+          if (typeof val === "string") {
+            try {
+              return JSON.parse(val);
+            } catch {
+              return [val];
+            }
+          }
+      
+          return [];
+        };
 
         setFormData({
           category:         p.category         || "",
@@ -87,9 +132,9 @@ const UploadProduct = () => {
           range:            p.range            || "",
           productDetails:   p.productDetails   || "",
           productTypeLabel: p.productTypeLabel || "",
-          thickness:        Array.isArray(p.thickness) ? p.thickness : (p.thickness ? [p.thickness] : []),
+          thickness:  parseArray(p.thickness),
           pattern:          p.pattern          || "",
-          color:            Array.isArray(p.color) ? p.color : [],
+          color: parseArray(p.color),
           dimensions:       p.dimensions       || "",
           packSize:         p.packSize         || "",
           wearLayerThickness: p.wearLayerThickness || "",
@@ -152,6 +197,8 @@ const UploadProduct = () => {
     fetchProduct();
   }, [id, isEdit, dispatch]);
 
+  console.log(formData)
+
 
   // ── Generic input change ────────────────────────────────────────────────
   const handleInputChange = (e) => {
@@ -179,7 +226,7 @@ const UploadProduct = () => {
       if (file.size > 5_000_000) { showToast("Image size must be under 5MB", "error"); return; }
       const reader = new FileReader();
       reader.onloadend = () => {
-        const entry = { url: reader.result, file, isExisting: false };
+        const entry = { url: reader.result, file, isExisting: false, isUrl: false };
         if (isProduct) {
           setProductImagePreview((prev) => [...prev, entry]);
           setFormData((prev) => ({ ...prev, productImage: [...prev.productImage, file] }));
@@ -193,6 +240,36 @@ const UploadProduct = () => {
     e.target.value = "";
   };
 
+  const handleImageUrlAdd = (imageType) => {
+    const isProduct = imageType === "product";
+    const url = (isProduct ? productImageUrl : functionsImageUrl).trim();
+    if (!url) return;
+
+    try {
+      const parsed = new URL(url);
+      if (!/^https?:$/i.test(parsed.protocol)) throw new Error("Invalid protocol");
+    } catch {
+      showToast("Please enter a valid image URL (http/https).", "error");
+      return;
+    }
+
+    const entry = {
+      url,
+      public_id: null,
+      file: null,
+      isExisting: true,
+      isUrl: true,
+    };
+
+    if (isProduct) {
+      setProductImagePreview((prev) => [...prev, entry]);
+      setProductImageUrl("");
+    } else {
+      setFunctionsImagePreview((prev) => [...prev, entry]);
+      setFunctionsImageUrl("");
+    }
+  };
+
   const removeImage = (index, imageType) => {
     const isProduct = imageType === "product";
     const previews  = isProduct ? productImagePreview : functionsImagePreview;
@@ -204,20 +281,24 @@ const UploadProduct = () => {
     if (isProduct) {
       setProductImagePreview((p) => p.filter((_, i) => i !== index));
       if (!removed.isExisting) {
-        setFormData((prev) => {
-          let nfIdx = -1;
-          previews.slice(0, index).forEach((p) => { if (!p.isExisting) nfIdx++; });
-          return { ...prev, productImage: prev.productImage.filter((_, i) => i !== nfIdx + 1) };
-        });
+        const newFileIndex = previews
+          .slice(0, index)
+          .filter((p) => !p.isExisting).length;
+        setFormData((prev) => ({
+          ...prev,
+          productImage: prev.productImage.filter((_, i) => i !== newFileIndex),
+        }));
       }
     } else {
       setFunctionsImagePreview((p) => p.filter((_, i) => i !== index));
       if (!removed.isExisting) {
-        setFormData((prev) => {
-          let nfIdx = -1;
-          previews.slice(0, index).forEach((p) => { if (!p.isExisting) nfIdx++; });
-          return { ...prev, functionsImage: prev.functionsImage.filter((_, i) => i !== nfIdx + 1) };
-        });
+        const newFileIndex = previews
+          .slice(0, index)
+          .filter((p) => !p.isExisting).length;
+        setFormData((prev) => ({
+          ...prev,
+          functionsImage: prev.functionsImage.filter((_, i) => i !== newFileIndex),
+        }));
       }
     }
   };
@@ -271,6 +352,8 @@ const UploadProduct = () => {
     setFunctionsImagePreview([]);
     setRemovedProductImages([]);
     setRemovedFunctionsImages([]);
+    setProductImageUrl("");
+    setFunctionsImageUrl("");
     setSpecificationFields([{ id: Date.now(), key: "", value: "" }]);
     setFeatureFields([{ id: Date.now(), icon: "", title: "", description: "" }]);
     setStatusMsg({ type: "", message: "" });
@@ -281,65 +364,109 @@ const UploadProduct = () => {
     e.preventDefault();
     setLoading(true);
     setStatusMsg({ type: "", message: "" });
-
+  
     if (productImagePreview.length === 0) {
       showToast("Please upload at least one product image.", "error");
       setLoading(false);
       return;
     }
-
+  
     try {
       const data = new FormData();
-
-      // All scalar + array fields
-      const skipKeys = new Set(["productImage", "functionsImage", "features", "details"]);
-      Object.entries(formData).forEach(([key, value]) => {
-        if (skipKeys.has(key)) return;
-        if (Array.isArray(value) || typeof value === "object") {
-          data.append(key, JSON.stringify(value));
-        } else {
-          data.append(key, value ?? "");
-        }
+  
+      // ── Scalar string fields (backend expects specific keys) ─────────────
+      const scalarMap = {
+        category: "category",
+        type: "type",
+        brand: "brand",
+        productName: "productName",
+        description: "description",
+        range: "range",
+        productDetails: "productDetails",
+        productTypeLabel: "productTypeLabel",
+        dimensions: "dimensions",
+        packSize: "packsize", // backend uses packsize (see old thunk)
+        wearLayerThickness: "wearLayerThickness",
+        coating: "coating",
+        jankaRating: "jankaRating",
+        petfriendly: "petfriendly",
+        waterresistant: "waterresistant",
+        scratchresistant: "scratchresistant",
+        fireTested: "fireTested",
+        vocCompliance: "vocCompliance",
+        certification: "certification",
+        brochurelink: "brochurelink",
+        supplyPrice: "supplyPrice",
+        supplyInstallPrice: "supplyInstallPrice",
+        sku: "sku",
+        Warrenty: "Warrenty",
+        pattern: "pattern",
+      };
+      Object.entries(scalarMap).forEach(([k, backendKey]) => {
+        data.append(backendKey, formData[k] ?? "");
       });
 
-      // Nested details object
-      data.append("details", JSON.stringify(formData.details));
-
-      // Features array
-      data.append("features", JSON.stringify(formData.features));
-
-      // New image files
-      formData.productImage.forEach((f)  => data.append("productImage",   f));
+      // ── Arrays as JSON strings (matches backend expectations) ────────────
+      data.append("thickness", JSON.stringify(formData.thickness || []));
+      data.append("color", JSON.stringify(formData.color || []));
+  
+      // ── Nested objects / arrays as JSON strings ──────────────────────────
+      data.append("details",        JSON.stringify(formData.details));
+      data.append("features",       JSON.stringify(formData.features));
+      data.append("specifications", JSON.stringify(formData.specifications));
+  
+      // ── New image files ──────────────────────────────────────────────────
+      formData.productImage.forEach((f)   => data.append("productImage",   f));
       formData.functionsImage.forEach((f) => data.append("functionsImage", f));
 
-      // Existing images to keep
-      productImagePreview
-        .filter((p) => p.isExisting)
-        .forEach((p) => data.append("existingProductImages",   JSON.stringify({ url: p.url, public_id: p.public_id })));
-      functionsImagePreview
-        .filter((p) => p.isExisting)
-        .forEach((p) => data.append("existingFunctionsImages", JSON.stringify({ url: p.url, public_id: p.public_id })));
+      
+  
+      // ── Existing images to keep (edit mode) ─────────────────────────────
+      const keepProduct = productImagePreview
+        .filter((p) => p.isExisting && !p.isUrl)
+        .map((p) => ({ url: p.url, public_id: p.public_id }));
+      const keepFunctions = functionsImagePreview
+        .filter((p) => p.isExisting && !p.isUrl)
+        .map((p) => ({ url: p.url, public_id: p.public_id }));
+      const productUrlImages = productImagePreview
+        .filter((p) => p.isUrl)
+        .map((p) => p.url);
+      const functionsUrlImages = functionsImagePreview
+        .filter((p) => p.isUrl)
+        .map((p) => p.url);
 
-      // Removed images
-      if (removedProductImages.length)   data.append("removedProductImages",   JSON.stringify(removedProductImages));
-      if (removedFunctionsImages.length) data.append("removedFunctionsImages", JSON.stringify(removedFunctionsImages));
-
-      // Dispatch correct action
-
-      const action = isEdit
-        ? dispatch(updateProduct({ id, formdata: data }))
-        : dispatch(uploadProduct(data));
-
-      const res = await action;
-
-      if (res?.error) throw new Error(res.error.message || "Request failed");
-
+      if (keepProduct.length) {
+        data.append("existingProductImages", JSON.stringify(keepProduct));
+      }
+      if (keepFunctions.length) {
+        data.append("existingFunctionsImages", JSON.stringify(keepFunctions));
+      }
+      if (productUrlImages.length) {
+        data.append("productImageUrls", JSON.stringify(productUrlImages));
+      }
+      if (functionsUrlImages.length) {
+        data.append("functionsImageUrls", JSON.stringify(functionsUrlImages));
+      }
+  
+      // ── Removed images ───────────────────────────────────────────────────
+      if (removedProductImages.length)
+        data.append("removedProductImages",   JSON.stringify(removedProductImages));
+      if (removedFunctionsImages.length)
+        data.append("removedFunctionsImages", JSON.stringify(removedFunctionsImages));
+  
+      console.log(data)
+      if (isEdit) {
+        await dispatch(updateProduct({ id, formdata: data })).unwrap();
+      } else {
+        await dispatch(uploadProduct(data)).unwrap();
+      }
+  
       showToast(
         isEdit ? "Product updated successfully!" : "Product uploaded successfully!",
         "success"
       );
       setStatusMsg({ type: "success", message: isEdit ? "Product updated!" : "Product uploaded!" });
-
+  
       if (!isEdit) {
         resetForm();
       } else {
@@ -348,8 +475,17 @@ const UploadProduct = () => {
         setRemovedFunctionsImages([]);
       }
     } catch (error) {
-      showToast(error.message || "Something went wrong.", "error");
-      setStatusMsg({ type: "error", message: error.message || "Failed. Please try again." });
+      const finalMsg =
+        typeof error === "string"
+          ? error
+          : error?.message ||
+            error?.msg ||
+            error?.error ||
+            error?.data?.message ||
+            (typeof error?.detail === "string" ? error.detail : null) ||
+            "Something went wrong.";
+      showToast(finalMsg, "error");
+      setStatusMsg({ type: "error", message: finalMsg });
     } finally {
       setLoading(false);
     }
@@ -453,7 +589,7 @@ const UploadProduct = () => {
                 <label className={labelCls}>Type *</label>
                 <select name="type" value={formData.type} onChange={handleInputChange}
                   required className={`${inputCls} bg-white`}>
-                  <option value={formData.type ? formData.type: "Select type"}>{formData.type ? formData.type: "Select type"}</option>
+                  <option value="">Select type</option>
                   {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
@@ -461,7 +597,7 @@ const UploadProduct = () => {
                 <label className={labelCls}>Brand *</label>
                 <select name="brand" value={formData.brand} onChange={handleInputChange}
                   required className={`${inputCls} bg-white`}>
-                  <option value={formData.brand ? formData.brand: "Select brand"}>{formData.brand ? formData.brand: "Select brand"}</option>
+                  <option value="">Select brand</option>
                   {BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
@@ -475,9 +611,9 @@ const UploadProduct = () => {
                   className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Product Type Label</label>
-                <input type="text" name="productTypeLabel" value={formData.productTypeLabel}
-                  onChange={handleInputChange} placeholder="e.g. Water-Resistant Laminate"
+                <label className={labelCls}>Slug</label>
+                <input type="text" name="slug" value={formData.slug || formData.productName.toLowerCase().replace(/ /g, '-')}
+                  onChange={handleInputChange} placeholder="e.g. water-resistant-laminate"
                   className={inputCls} />
               </div>
             </div>
@@ -526,14 +662,14 @@ const UploadProduct = () => {
                 <label className={labelCls}>Pattern</label>
                 <select name="pattern" value={formData.pattern}
                   onChange={handleInputChange} className={`${inputCls} bg-white`}>
-                  <option value={formData.pattern ? formData.pattern : "Select pattern"}>{formData.pattern ? formData.pattern : "Select pattern"}</option>
+                  <option value="">Select pattern</option>
                   {PATTERNS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div>
                 <label className={labelCls}>Color (Multiple)</label>
                 <select name="color" value={formData.color}
-                  onChange={(e) => handleMultiSelect(e, "color")}
+                  onChange={(e) => handleMultiSelect(e, "color")} 
                   multiple size={4} className={`${inputCls} bg-white`}>
                   {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -840,6 +976,22 @@ const UploadProduct = () => {
                 <input type="file" multiple accept="image/*" className="hidden"
                   onChange={(e) => handleImageUpload(e, "product")} />
               </label>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="url"
+                  value={productImageUrl}
+                  onChange={(e) => setProductImageUrl(e.target.value)}
+                  placeholder="Or paste product image URL (https://...)"
+                  className={inputCls}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleImageUrlAdd("product")}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50"
+                >
+                  Add URL
+                </button>
+              </div>
               {productImagePreview.length > 0 && <ImageGrid previews={productImagePreview} type="product" />}
             </div>
 
@@ -865,6 +1017,22 @@ const UploadProduct = () => {
                 <input type="file" multiple accept="image/*" className="hidden"
                   onChange={(e) => handleImageUpload(e, "functions")} />
               </label>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="url"
+                  value={functionsImageUrl}
+                  onChange={(e) => setFunctionsImageUrl(e.target.value)}
+                  placeholder="Or paste function image URL (https://...)"
+                  className={inputCls}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleImageUrlAdd("functions")}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50"
+                >
+                  Add URL
+                </button>
+              </div>
               {functionsImagePreview.length > 0 && (
                 <ImageGrid previews={functionsImagePreview} type="functions"
                   columns="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getAllProducts, searchProduct } from "../features/product/product";
+import { getAllProducts, searchProduct, deleteProduct } from "../features/product/product";
 import { useDispatch } from "react-redux";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -20,6 +20,7 @@ const Products = () => {
   const [visibleProduct, setVisibleProduct] = useState([]);
   const [visibleCount, setVisibleCount] = useState(8);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [removeProductId, setRemoveProductId] = useState(null);
   const [filterName, setFilterName] = useState("");
   const [productBrands, setProductBrands] = useState([]);
   const [filterBrand, setFilterBrand] = useState("");
@@ -89,7 +90,10 @@ const Products = () => {
         </div>
 
         <div className="flex items-center gap-10">
-          <button onClick={() => navigate(`/uploadproduct`)} className="py-3 px-10 rounded-xl shadow-sm font-semibold text-md hover:bg-gray-900 hover:text-white cursor-pointer">
+          <button
+            onClick={() => navigate(`/uploadproduct`)}
+            className="py-3 px-10 rounded-xl shadow-sm font-semibold text-md hover:bg-gray-900 hover:text-white cursor-pointer"
+          >
             Add Product
           </button>
           {/* View Toggle */}
@@ -250,7 +254,10 @@ const Products = () => {
                             <Edit size={15} />
                           </button>
                           <button
-                            onClick={() => setShowConfirmModal(true)}
+                            onClick={() => {
+                              setShowConfirmModal(true);
+                              setRemoveProductId(item._id);
+                            }}
                             className="p-2 rounded-xl bg-gray-50 hover:bg-red-50 hover:text-red-500
                                        text-gray-400 border border-gray-100 hover:border-red-200
                                        transition-all duration-200"
@@ -292,11 +299,17 @@ const Products = () => {
                         />
                         {/* Hover overlay actions */}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-end justify-end gap-2 p-3 opacity-0 group-hover:opacity-100">
-                          <button className="p-2 rounded-xl bg-white/90 hover:bg-white text-gray-600 shadow-sm transition-all">
+                          <button
+                            onClick={() => navigate(`/editproduct/${item._id}`)}
+                            className="p-2 rounded-xl bg-white/90 hover:bg-white text-gray-600 shadow-sm transition-all cursor-pointer"
+                          >
                             <Edit size={14} />
                           </button>
                           <button
-                            onClick={() => setShowConfirmModal(true)}
+                            onClick={() => {
+                              setShowConfirmModal(true);
+                              setRemoveProductId(item._id);
+                            }}
                             className="p-2 rounded-xl bg-white/90 hover:bg-white text-red-500 shadow-sm transition-all"
                           >
                             <Trash size={14} />
@@ -427,7 +440,10 @@ const Products = () => {
               {/* Actions */}
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowConfirmModal(false)}
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    setRemoveProductId(null);
+                  }}
                   className="flex-1 h-11 rounded-xl text-sm font-medium
                              bg-gray-100 text-gray-700 hover:bg-gray-200
                              active:scale-[0.97] transition-all duration-150 cursor-pointer"
@@ -435,7 +451,13 @@ const Products = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => setShowConfirmModal(false)}
+                  onClick={() => {
+                    dispatch(deleteProduct(removeProductId));
+                    setShowConfirmModal(false);
+                    setRemoveProductId(null);
+                    setVisibleProduct(visibleProduct.filter((product) => product._id !== removeProductId));
+                    setAllProducts(allProducts.filter((product) => product._id !== removeProductId));
+                  }}
                   className="flex-1 h-11 rounded-xl text-sm font-medium
                              bg-red-500 hover:bg-red-600 text-white
                              shadow-lg shadow-red-500/25 hover:shadow-red-500/40

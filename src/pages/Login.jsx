@@ -50,7 +50,7 @@ export default function Login() {
             />
           </div>
 
-          <Link to={"/uploadproduct"}>
+          <Link to={"/dashboard"}>
             <button
               type="submit"
               className="w-full bg-[#998e8a]/70 text-white font-semibold py-3 rounded-lg hover:bg-[#998e8a] transition cursor-pointer"

@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { label: "Products", icon: Package, to: "/products" },
   { label: "Orders", icon: ShoppingCart, to: "/orders" },
   { label: "Customers", icon: Users, to: "/customers" },
-  { label: "Create Pages", icon: PanelsTopLeft, to: "/create-pages" },
+  { label: "Pages", icon: PanelsTopLeft, to: "/pages" },
   { label: "Settings", icon: Settings, to: "/settings" },
 ];
 

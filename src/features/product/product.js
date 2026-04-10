@@ -7,6 +7,7 @@ import {
   PRODUCT_BY_RANGE,
   SEARCH_PRODUCT,
   UPDATE_PRODUCT,
+  DELETE_PRODUCT,
 } from "../../api/api";
 import api from "../../api/axios";
 
@@ -29,50 +30,48 @@ export const uploadProduct = createAsyncThunk(
   "product/uploadProduct",
   async (productData, { rejectWithValue }) => {
     try {
+      // Upload form already builds FormData in UploadProduct.jsx — pass through.
+      if (productData instanceof FormData) {
+        const { data } = await api.post(UPLOAD_PRODUCT, productData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        return data;
+      }
+
       const formData = new FormData();
+      formData.append("category", productData.category ?? "");
+      formData.append("type", productData.type ?? "");
+      formData.append("brand", productData.brand ?? "");
+      formData.append("range", productData.range ?? "");
+      formData.append("productName", productData.productName ?? "");
+      formData.append("productDetails", productData.productDetails ?? "");
+      formData.append("sku", productData.sku ?? "");
+      formData.append("petfriendly", productData.petfriendly ?? "");
+      formData.append("waterresistant", productData.waterresistant ?? "");
+      formData.append("scratchresistant", productData.scratchresistant ?? "");
+      formData.append("pattern", productData.pattern ?? "");
+      formData.append("dimensions", productData.dimensions ?? "");
+      formData.append("packsize", productData.packsize ?? productData.packSize ?? "");
+      formData.append("brochurelink", productData.brochurelink ?? "");
+      formData.append("thickness", productData.thickness ?? "");
+      formData.append("description", productData.description ?? "");
+      formData.append("color", JSON.stringify(productData.color ?? []));
 
-      // text fields
-      formData.append("category", productData.category);
-      formData.append("type", productData.type);
-      formData.append("brand", productData.brand);
-      formData.append("range", productData.range);
-      formData.append("productName", productData.productName);
-      formData.append("productDetails", productData.productDetails);
-      formData.append("sku", productData.sku);
-      formData.append("petfriendly", productData.petfriendly);
-      formData.append("waterresistant", productData.waterresistant);
-      formData.append("scratchresistant", productData.scratchresistant);
-      formData.append("pattern", productData.pattern);
-      formData.append("dimensions", productData.dimensions);
-      formData.append("packsize", productData.packsize);
-      formData.append("brochurelink", productData.brochurelink);
-      formData.append("thickness", productData.thickness);
-      formData.append("description", productData.description);
-
-      // arrays → stringify
-      formData.append("color", JSON.stringify(productData.color));
-
-      // product images
       productData.productImage?.forEach((file) => {
         formData.append("productImage", file);
       });
-
-      // function images
       productData.functionsImage?.forEach((file) => {
         formData.append("functionsImage", file);
       });
 
-      console.log(formData);
-
       const { data } = await api.post(UPLOAD_PRODUCT, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
-
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      return rejectWithValue(
+        error.response?.data ?? error.message ?? "Upload failed",
+      );
     }
   },
 );
@@ -96,8 +95,9 @@ export const getProductById = createAsyncThunk(
   "product/getProductById",
   async (proId, { rejectWithValue }) => {
     try {
-      const data = await api.post(`${PRODUCT_BY_ID}/${proId}`);
-      return data;
+      const res = await api.post(`${PRODUCT_BY_ID}/${proId}`);
+      // Axios wraps server body in res.data; keep same shape slice expects (payload.data)
+      return res;
     } catch (error) {
       return rejectWithValue(error.response?.data || error.message);
     }
@@ -149,14 +149,27 @@ export const searchProduct = createAsyncThunk(
 export const updateProduct = createAsyncThunk(
   "product/updateproduct",
   async ({ id, formdata }, { rejectWithValue }) => {
-    console.log(formdata);
     try {
-      console.log(id);
+      console.log(id, formdata)
       const res = await api.put(`${UPDATE_PRODUCT}/${id}`, formdata, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
+      return res.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data ?? error.message ?? "Update failed",
+      );
+    }
+  },
+);
+
+export const deleteProduct = createAsyncThunk(
+  "product/deleteProduct",
+  async (id, { rejectWithValue }) => {
+    try {
+      const res = await api.delete(`${DELETE_PRODUCT}/${id}`);
       return res;
     } catch (error) {
       return rejectWithValue(error);
@@ -260,6 +273,19 @@ const productSlice = createSlice({
         state.list.searchResults = action.payload;
       })
       .addCase(updateProduct.rejected, (state, action) => {
+        state.list.loading = false;
+        state.list.error = action.payload;
+      });
+
+    builder
+      .addCase(deleteProduct.pending, (state) => {
+        state.list.loading = true;
+      })
+      .addCase(deleteProduct.fulfilled, (state, action) => {
+        state.list.loading = false;
+        state.list.data = state.list.data.filter((product) => product._id !== action.payload);
+      })
+      .addCase(deleteProduct.rejected, (state, action) => {
         state.list.loading = false;
         state.list.error = action.payload;
       });

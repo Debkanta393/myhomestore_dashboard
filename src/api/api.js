@@ -1,15 +1,15 @@
 
 
 // Product API
-export const UPLOAD_PRODUCT="api/product/uploadProduct"
+export const UPLOAD_PRODUCT="/api/product/uploadProduct"
 export const ALL_PRODUCT="/api/product/getallProduct"
-export const PRODUCT_BY_ID="api/product/getProductById"
+export const PRODUCT_BY_ID="/api/product/getProductById"
 export const PRODUCT_FOR_CARTS="api/product/getProductsForCart"
 export const PRODUCT_BY_TYPE_NAME="/api/product/getProductbyTypeName"
 export const PRODUCT_BY_RANGE="/api/product/getProductbyRange"
 export const SEARCH_PRODUCT="/api/product/searchproduct"
 export const UPDATE_PRODUCT="/api/product/updateproduct"
-
+export const DELETE_PRODUCT="/api/product/deleteProduct"
 
 
 // Cart API
