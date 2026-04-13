@@ -4,15 +4,18 @@ import "@measured/puck/puck.css";
 import { config } from "./config.jsx";
 import api from "../api/axios.js";
 import { useParams } from "react-router-dom";
+import {
+  BREAKPOINT_OPTIONS,
+  BreakpointProvider,
+} from "./breakpointContext.jsx";
 
-// ─── EMPTY data for a brand new page ─────────────────────────────────────────
+// ─── EMPTY data for a new page ───
 const EMPTY_DATA = { content: [], root: { props: {} } };
 
 function DrawerCapture({ children, drawerRef, onReady }) {
   useEffect(() => {
     drawerRef.current = children;
     onReady();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [children]);
   return null;
 }
@@ -141,18 +144,47 @@ function ThemePanel({ theme, setTheme, customCss, setCustomCss, onMetaChange }) 
   );
 }
 
-// ─── Custom Header (inside Puck tree so useGetPuck works) ─────────────────────
+// ─── Custom Header ───
 function CustomHeader({
   slug, setSlug, publishState, hasChanges,
   errorMsg, onPublish, onSlugChange, onLoad, loadState,
   title, setTitle, status, setStatus, onMetaChange,
+  activeBreakpoint, setActiveBreakpoint,
 }) {
   const getPuck = useGetPuck();
+  const [titleDraft, setTitleDraft] = useState(title || "");
+  const [slugDraft, setSlugDraft] = useState(slug || "");
+
+  useEffect(() => {
+    setTitleDraft(title || "");
+  }, [title]);
+
+  useEffect(() => {
+    setSlugDraft(slug || "");
+  }, [slug]);
+
+  const commitTitle = useCallback(() => {
+    if (titleDraft === title) return;
+    setTitle(titleDraft);
+    onMetaChange();
+  }, [onMetaChange, setTitle, title, titleDraft]);
+
+  const commitSlug = useCallback(() => {
+    const normalized = (slugDraft || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, "");
+    if (normalized !== slugDraft) {
+      setSlugDraft(normalized);
+    }
+    if (normalized === slug) return;
+    setSlug(normalized);
+    onSlugChange();
+  }, [onSlugChange, setSlug, slug, slugDraft]);
 
   const isDisabled =
     publishState === "saving" ||
     (publishState === "saved" && !hasChanges) ||
-    !slug.trim();
+    !slugDraft.trim();
 
   const statusConfig = {
     idle:   { label: "Publish",     color: "#2563eb" },
@@ -194,8 +226,9 @@ function CustomHeader({
         <input
           type="text"
           placeholder="Page title"
-          value={title}
-          onChange={(e) => { setTitle(e.target.value); onMetaChange(); }}
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={commitTitle}
           style={{
             width: 220, padding: "6px 10px",
             border: "1px solid #d1d5db", borderRadius: 8,
@@ -212,12 +245,8 @@ function CustomHeader({
           <input
             type="text"
             placeholder="home, about, contact..."
-            value={slug}
-            onChange={(e) => {
-              const val = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, "");
-              setSlug(val);
-              onSlugChange();
-            }}
+            value={slugDraft}
+            onChange={(e) => setSlugDraft(e.target.value)}
             style={{
               width: "200px", paddingLeft: 24, paddingRight: 12,
               paddingTop: 6, paddingBottom: 6,
@@ -232,19 +261,26 @@ function CustomHeader({
               e.target.style.background = "#fff";
             }}
             onBlur={(e) => {
+              commitSlug();
               e.target.style.borderColor = "#d1d5db";
               e.target.style.boxShadow = "none";
               e.target.style.background = "#f9fafb";
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && slug.trim()) onLoad(slug.trim());
+              if (e.key === "Enter") {
+                commitSlug();
+                if (slugDraft.trim()) onLoad(slugDraft.trim());
+              }
             }}
           />
         </div>
 
         <button
-          onClick={() => { if (slug.trim()) onLoad(slug.trim()); }}
-          disabled={!slug.trim() || loadState === "loading"}
+          onClick={() => {
+            commitSlug();
+            if (slugDraft.trim()) onLoad(slugDraft.trim());
+          }}
+          disabled={!slugDraft.trim() || loadState === "loading"}
           style={{
             padding: "6px 14px", borderRadius: 8,
             border: "1px solid #d1d5db",
@@ -253,10 +289,10 @@ function CustomHeader({
             cursor: !slug.trim() || loadState === "loading" ? "not-allowed" : "pointer",
             whiteSpace: "nowrap", flexShrink: 0,
             transition: "all 0.15s",
-            opacity: !slug.trim() ? 0.5 : 1,
+            opacity: !slugDraft.trim() ? 0.5 : 1,
           }}
           onMouseEnter={(e) => {
-            if (slug.trim() && loadState !== "loading") {
+            if (slugDraft.trim() && loadState !== "loading") {
               e.currentTarget.style.background = "#f3f4f6";
               e.currentTarget.style.borderColor = "#9ca3af";
             }
@@ -269,7 +305,7 @@ function CustomHeader({
           {loadState === "loading" ? "Loading…" : "Load Page"}
         </button>
 
-        {/* ✅ FIX 2: status select drives the parent state directly */}
+        {/* status select drives the parent state directly */}
         <select
           value={status}
           onChange={(e) => {
@@ -331,6 +367,36 @@ function CustomHeader({
         </div>
       )}
 
+      <div
+        style={{
+          display: "inline-flex",
+          border: "1px solid #d1d5db",
+          borderRadius: 8,
+          overflow: "hidden",
+          marginRight: 8,
+          flexShrink: 0,
+        }}
+      >
+        {BREAKPOINT_OPTIONS.map((bp) => (
+          <button
+            key={bp.key}
+            onClick={() => setActiveBreakpoint(bp.key)}
+            style={{
+              border: "none",
+              borderRight: bp.key !== "mobile" ? "1px solid #d1d5db" : "none",
+              background: activeBreakpoint === bp.key ? "#eef2ff" : "#ffffff",
+              color: activeBreakpoint === bp.key ? "#3730a3" : "#374151",
+              fontSize: 12,
+              fontWeight: 700,
+              padding: "7px 10px",
+              cursor: "pointer",
+            }}
+          >
+            {bp.label}
+          </button>
+        ))}
+      </div>
+
       {/* Inline publish error */}
       {publishState === "error" && errorMsg && (
         <span style={{ fontSize: 12, color: "#dc2626", maxWidth: 200, flexShrink: 0 }}>{errorMsg}</span>
@@ -364,7 +430,7 @@ function CustomHeader({
   );
 }
 
-// ─── Main Editor ─────────────────────────────────────────────────────────────
+// ─── Main Editor ───
 export default function PuckEditor() {
   const params = useParams();
   const [slug, setSlug]                 = useState("");
@@ -386,6 +452,7 @@ export default function PuckEditor() {
   const [errorMsg, setErrorMsg]         = useState("");
   const [loadState, setLoadState]       = useState("idle");
   const [sidebarTab, setSidebarTab]     = useState("Blocks");
+  const [activeBreakpoint, setActiveBreakpoint] = useState("desktop");
   const drawerRef  = useRef(null);
   const [drawerReady, setDrawerReady]   = useState(false);
 
@@ -439,7 +506,7 @@ export default function PuckEditor() {
           ...((safeData.root && safeData.root.props) || {}),
           __cmsMeta: {
             title:     title     || "",
-            // ✅ FIX 2: Accept currentStatus parameter so the value is never stale
+            // Accept currentStatus parameter so the value is never stale
             status:    currentStatus || status || "draft",
             customCss: customCss || "",
             theme:     theme     || null,
@@ -457,8 +524,7 @@ export default function PuckEditor() {
 
       const freshData = loaded.data || EMPTY_DATA;
 
-      // ✅ FIX 1: Set puckData first, THEN change the key so Puck remounts
-      // with the correct data already in state.
+      // Set puckData first, THEN change the key so Puck remounts
       setPuckData(freshData);
       setTitle(loaded.meta.title || "");
       setStatus(loaded.meta.status || "draft");
@@ -469,9 +535,6 @@ export default function PuckEditor() {
       setLoadState("found");
       setHasChanges(false);
       setPublishState("idle");
-
-      // Bump the editor key AFTER all state is applied so Puck re-initialises
-      // with the fully-loaded data, not the previous stale data.
       setEditorKey(`${pageSlug}-${Date.now()}`);
 
     } catch (err) {
@@ -510,24 +573,50 @@ export default function PuckEditor() {
     document.title = `${title} | CMS`;
   }, [title]);
 
-  // ✅ FIX 2: handlePublish now receives the live status value directly
+  // handlePublish now receives the live status value directly
   // from the caller (via the ref pattern below) so it is never stale.
   const statusRef = useRef(status);
   useEffect(() => { statusRef.current = status; }, [status]);
+
+
+  function renderToHTML(data) {
+  if (!data?.content) return "";
+
+  return data.content
+    .map((block) => {
+      switch (block.type) {
+        case "Text":
+          return `<p>${block.props.text || ""}</p>`;
+
+        case "Heading":
+          return `<h1>${block.props.text || ""}</h1>`;
+
+        case "Image":
+          return `<img src="${block.props.src}" alt="" />`;
+
+        default:
+          return "";
+      }
+    })
+    .join("");
+}
+
 
   const handlePublish = useCallback(async (data) => {
     if (!slug.trim()) return;
     setPublishState("saving");
     setErrorMsg("");
+    console.log(statusRef.current)
 
     // Read the latest status from the ref — not the closure value.
     const currentStatus = statusRef.current;
 
     try {
+
+
       const payload = {
         slug:      slug.trim(),
         title:     title.trim() || slug.trim(),
-        // ✅ FIX 2: Always use the current (ref-read) status value
         status:    currentStatus,
         customCss,
         theme,
@@ -563,6 +652,8 @@ export default function PuckEditor() {
           onSlugChange={handleSlugChange}
           onLoad={handleLoad}
           onMetaChange={handleMetaChange}
+          activeBreakpoint={activeBreakpoint}
+          setActiveBreakpoint={setActiveBreakpoint}
         />
       ),
       drawer: ({ children }) => (
@@ -678,13 +769,31 @@ export default function PuckEditor() {
           }
           styleEl.textContent = css;
         }, [document, theme, customCss]);
-        return <>{children}</>;
+
+        const activeViewport = BREAKPOINT_OPTIONS.find(
+          (item) => item.key === activeBreakpoint,
+        ) || BREAKPOINT_OPTIONS[0];
+
+        return (
+          <div
+            style={{
+              width: activeViewport.width,
+              maxWidth: "100%",
+              margin: "0 auto",
+              minHeight: "100%",
+              transition: "width 0.2s ease",
+            }}
+          >
+            {children}
+          </div>
+        );
       },
     }),
     [
       slug, title, status, publishState, hasChanges, errorMsg, loadState,
       handlePublish, handleSlugChange, handleLoad, handleMetaChange,
       sidebarTab, drawerReady, customCss, theme,
+      activeBreakpoint,
     ],
   );
 
@@ -695,17 +804,16 @@ export default function PuckEditor() {
     }}>
       <div style={{ flex: 1, overflow: "hidden" }}>
         {customCss?.trim() && <style>{customCss}</style>}
-        {/* ✅ FIX 1: key is now editorKey (not slug+loadState).
-            editorKey only changes AFTER puckData is fully updated,
-            so Puck always mounts with the correct loaded data. */}
-        <Puck
-          config={config}
-          data={puckData}
-          onChange={handleChange}
-          onPublish={handlePublish}
-          overrides={overrides}
-          key={editorKey}
-        />
+        <BreakpointProvider value={{ activeBreakpoint, setActiveBreakpoint }}>
+          <Puck
+            config={config}
+            data={puckData}
+            onChange={handleChange}
+            onPublish={handlePublish}
+            overrides={overrides}
+            key={editorKey}
+          />
+        </BreakpointProvider>
       </div>
 
       {/* Success Toast */}

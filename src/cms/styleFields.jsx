@@ -1,56 +1,27 @@
 // src/cms/styleFields.js
-import { FieldLabel } from "@measured/puck";
+import { desktopVal, buildResponsiveCss } from "../lib/resolveResponsive.js";
+import { ResponsiveField } from "../components/ResponsiveField.jsx";
 
-// ─── Custom Color Picker field ──────────────────────────────────────────────
-export const colorPickerField = (label) => ({
+const responsiveTextField = (label, placeholder = "") => ({
   type: "custom",
   label,
-  render: ({ value, onChange, field }) => (
-    <FieldLabel label={field.label}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <input
-          type="color"
-          value={value || "#000000"}
-          onChange={(e) => onChange(e.target.value)}
-          style={{ width: 40, height: 32, padding: 2, border: "1px solid #ddd", borderRadius: 4, cursor: "pointer" }}
-        />
-        <input
-          type="text"
-          value={value || ""}
-          placeholder="hex / rgba / transparent"
-          onChange={(e) => onChange(e.target.value)}
-          style={{ flex: 1, padding: "4px 8px", border: "1px solid #ddd", borderRadius: 4, fontSize: 12 }}
-        />
-      </div>
-    </FieldLabel>
+  render: ({ value, onChange }) => (
+    <ResponsiveField
+      value={value}
+      onChange={onChange}
+      inputType="text"
+      placeholder={placeholder}
+    />
   ),
 });
 
-// ─── Background Image field with preview ───────────────────────────────────
-export const backgroundImageField = {
+const responsiveNumberField = (label) => ({
   type: "custom",
-  label: "Background Image URL",
-  render: ({ value, onChange, field }) => (
-    <FieldLabel label={field.label}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <input
-          type="text"
-          value={value || ""}
-          placeholder="https://example.com/image.jpg"
-          onChange={(e) => onChange(e.target.value)}
-          style={{ padding: "4px 8px", border: "1px solid #ddd", borderRadius: 4, fontSize: 12 }}
-        />
-        {value && (
-          <img
-            src={value}
-            alt="preview"
-            style={{ width: "100%", height: 80, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
-          />
-        )}
-      </div>
-    </FieldLabel>
+  label,
+  render: ({ value, onChange }) => (
+    <ResponsiveField value={value} onChange={onChange} inputType="number" />
   ),
-};
+});
 
 // ─── Font Family field ──────────────────────────────────────────────────────
 const FONT_FAMILIES = [
@@ -79,49 +50,50 @@ const FONT_FAMILIES = [
 export const fontFamilyField = {
   type: "custom",
   label: "Font Family",
-  render: ({ value, onChange, field }) => (
-    <FieldLabel label={field.label}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <select
-          value={value || "Default"}
-          onChange={(e) => onChange(e.target.value === "Default" ? "" : e.target.value)}
-          style={{ padding: "4px 8px", border: "1px solid #ddd", borderRadius: 4, fontSize: 12 }}
-        >
-          {FONT_FAMILIES.map((f) => (
-            <option key={f} value={f} style={{ fontFamily: f }}>
-              {f}
-            </option>
-          ))}
-        </select>
-        {value && value !== "Default" && (
-          <p style={{ fontFamily: value, fontSize: 14, padding: "4px 0", color: "#555" }}>
-            The quick brown fox
-          </p>
-        )}
-      </div>
-    </FieldLabel>
+  render: ({ value, onChange }) => (
+    <ResponsiveField
+      value={value}
+      onChange={onChange}
+      inputType="select"
+      options={FONT_FAMILIES.map((f) => ({ label: f, value: f === "Default" ? "" : f }))}
+    />
   ),
 };
 
 // ─── Select field helper ────────────────────────────────────────────────────
 export const selectField = (label, options) => ({
-  type: "select",
+  type: "custom",
   label,
-  options: options.map((o) =>
-    typeof o === "string" ? { label: o, value: o } : o
+  render: ({ value, onChange }) => (
+    <ResponsiveField
+      value={value}
+      onChange={onChange}
+      inputType="select"
+      options={options.map((o) => (typeof o === "string" ? { label: o, value: o } : o))}
+    />
   ),
 });
 
+// ─── Custom Color Picker field ──────────────────────────────────────────────
+export const colorPickerField = (label) =>
+  responsiveTextField(label, "hex / rgba / transparent");
+
+// ─── Background Image field with preview ───────────────────────────────────
+export const backgroundImageField = responsiveTextField(
+  "Background Image URL",
+  "https://example.com/image.jpg",
+);
+
 // ─── Spacing fields ─────────────────────────────────────────────────────────
 export const spacingFields = {
-  paddingTop:    { type: "number", label: "Padding Top (px)" },
-  paddingBottom: { type: "number", label: "Padding Bottom (px)" },
-  paddingLeft:   { type: "number", label: "Padding Left (px)" },
-  paddingRight:  { type: "number", label: "Padding Right (px)" },
-  marginTop:     { type: "number", label: "Margin Top (px)" },
-  marginBottom:  { type: "number", label: "Margin Bottom (px)" },
-  marginLeft:    { type: "number", label: "Margin Left (px)" },
-  marginRight:   { type: "number", label: "Margin Right (px)" },
+  paddingTop: responsiveNumberField("Padding Top (px)"),
+  paddingBottom: responsiveNumberField("Padding Bottom (px)"),
+  paddingLeft: responsiveNumberField("Padding Left (px)"),
+  paddingRight: responsiveNumberField("Padding Right (px)"),
+  marginTop: responsiveNumberField("Margin Top (px)"),
+  marginBottom: responsiveNumberField("Margin Bottom (px)"),
+  marginLeft: responsiveNumberField("Margin Left (px)"),
+  marginRight: responsiveNumberField("Margin Right (px)"),
 };
 
 // ─── Background fields ───────────────────────────────────────────────────────
@@ -142,7 +114,7 @@ export const backgroundFields = {
 // ─── Typography fields ───────────────────────────────────────────────────────
 export const typographyFields = {
   color:         colorPickerField("Text Color"),
-  fontSize:      { type: "number", label: "Font Size (px)" },
+  fontSize:      responsiveNumberField("Font Size (px)"),
   fontWeight: selectField("Font Weight", [
     { label: "Thin (100)",       value: "100" },
     { label: "Light (300)",      value: "300" },
@@ -162,19 +134,19 @@ export const typographyFields = {
   textDecoration: selectField("Text Decoration", [
     "none", "underline", "line-through", "overline",
   ]),
-  lineHeight:    { type: "number", label: "Line Height" },
-  letterSpacing: { type: "number", label: "Letter Spacing (px)" },
-  wordSpacing:   { type: "number", label: "Word Spacing (px)" },
+  lineHeight:    responsiveNumberField("Line Height"),
+  letterSpacing: responsiveNumberField("Letter Spacing (px)"),
+  wordSpacing:   responsiveNumberField("Word Spacing (px)"),
 };
 
 // ─── Border fields ───────────────────────────────────────────────────────────
 export const borderFields = {
-  borderRadius:        { type: "number", label: "Border Radius (px)" },
-  borderTopLeftRadius: { type: "number", label: "Border Radius TL (px)" },
-  borderTopRightRadius:{ type: "number", label: "Border Radius TR (px)" },
-  borderBottomLeftRadius:  { type: "number", label: "Border Radius BL (px)" },
-  borderBottomRightRadius: { type: "number", label: "Border Radius BR (px)" },
-  borderWidth:  { type: "number", label: "Border Width (px)" },
+  borderRadius: responsiveNumberField("Border Radius (px)"),
+  borderTopLeftRadius: responsiveNumberField("Border Radius TL (px)"),
+  borderTopRightRadius: responsiveNumberField("Border Radius TR (px)"),
+  borderBottomLeftRadius: responsiveNumberField("Border Radius BL (px)"),
+  borderBottomRightRadius: responsiveNumberField("Border Radius BR (px)"),
+  borderWidth: responsiveNumberField("Border Width (px)"),
   borderColor:  colorPickerField("Border Color"),
   borderStyle:  selectField("Border Style", ["none", "solid", "dashed", "dotted", "double", "groove"]),
 };
@@ -194,14 +166,14 @@ export const layoutFields = {
     "flex-start", "flex-end", "center", "space-between", "space-around", "space-evenly",
   ]),
   flexWrap: selectField("Flex Wrap", ["nowrap", "wrap", "wrap-reverse"]),
-  gap:      { type: "number", label: "Gap (px)" },
-  gridTemplateColumns: { type: "text", label: "Grid Template Columns (e.g. 1fr 1fr)" },
-  width:    { type: "text", label: "Width (px, %, auto)" },
-  maxWidth: { type: "text", label: "Max Width (px, %, auto)" },
-  minWidth: { type: "text", label: "Min Width (px, %)" },
-  height:   { type: "text", label: "Height (px, %, auto)" },
-  maxHeight:{ type: "text", label: "Max Height (px, %)" },
-  minHeight:{ type: "text", label: "Min Height (px, %)" },
+  gap: responsiveNumberField("Gap (px)"),
+  gridTemplateColumns: responsiveTextField("Grid Template Columns (e.g. 1fr 1fr)"),
+  width: responsiveTextField("Width (px, %, auto)"),
+  maxWidth: responsiveTextField("Max Width (px, %, auto)"),
+  minWidth: responsiveTextField("Min Width (px, %)"),
+  height: responsiveTextField("Height (px, %, auto)"),
+  maxHeight: responsiveTextField("Max Height (px, %)"),
+  minHeight: responsiveTextField("Min Height (px, %)"),
   overflow: selectField("Overflow", ["visible", "hidden", "scroll", "auto"]),
   overflowX: selectField("Overflow X", ["visible", "hidden", "scroll", "auto"]),
   overflowY: selectField("Overflow Y", ["visible", "hidden", "scroll", "auto"]),
@@ -212,16 +184,16 @@ export const positionFields = {
   position: selectField("Position", [
     "static", "relative", "absolute", "fixed", "sticky",
   ]),
-  top:    { type: "text", label: "Top (px, %)" },
-  right:  { type: "text", label: "Right (px, %)" },
-  bottom: { type: "text", label: "Bottom (px, %)" },
-  left:   { type: "text", label: "Left (px, %)" },
-  zIndex: { type: "number", label: "Z-Index" },
+  top: responsiveTextField("Top (px, %)"),
+  right: responsiveTextField("Right (px, %)"),
+  bottom: responsiveTextField("Bottom (px, %)"),
+  left: responsiveTextField("Left (px, %)"),
+  zIndex: responsiveNumberField("Z-Index"),
 };
 
 // ─── Effects fields ──────────────────────────────────────────────────────────
 export const effectFields = {
-  opacity:    { type: "number", label: "Opacity (0–1)" },
+  opacity: responsiveNumberField("Opacity (0–1)"),
   boxShadow: selectField("Box Shadow", [
     { label: "None",   value: "none" },
     { label: "Small",  value: "0 1px 3px rgba(0,0,0,0.12)" },
@@ -243,7 +215,11 @@ export const effectFields = {
 
 // ─── Master style builder ────────────────────────────────────────────────────
 export const buildStyle = (props) => {
-  const px = (v) => (v !== undefined && v !== "" ? `${v}px` : undefined);
+  const scalar = (v) => desktopVal(v);
+  const px = (v) => {
+    const base = scalar(v);
+    return base !== undefined && base !== "" ? `${base}px` : undefined;
+  };
   return {
     // Spacing
     paddingTop:    px(props.paddingTop),
@@ -255,21 +231,21 @@ export const buildStyle = (props) => {
     marginLeft:    px(props.marginLeft),
     marginRight:   px(props.marginRight),
     // Background
-    backgroundColor:    props.backgroundColor  || undefined,
-    backgroundImage:    props.backgroundImage  ? `url(${props.backgroundImage})` : undefined,
-    backgroundSize:     props.backgroundSize   || undefined,
-    backgroundPosition: props.backgroundPosition || undefined,
-    backgroundRepeat:   props.backgroundRepeat || undefined,
+    backgroundColor:    scalar(props.backgroundColor) || undefined,
+    backgroundImage:    scalar(props.backgroundImage) ? `url(${scalar(props.backgroundImage)})` : undefined,
+    backgroundSize:     scalar(props.backgroundSize) || undefined,
+    backgroundPosition: scalar(props.backgroundPosition) || undefined,
+    backgroundRepeat:   scalar(props.backgroundRepeat) || undefined,
     // Typography
-    color:          props.color         || undefined,
+    color:          scalar(props.color) || undefined,
     fontSize:       px(props.fontSize),
-    fontWeight:     props.fontWeight    || undefined,
-    fontFamily:     props.fontFamily    || undefined,
-    fontStyle:      props.fontStyle     || undefined,
-    textAlign:      props.textAlign     || undefined,
-    textTransform:  props.textTransform || undefined,
-    textDecoration: props.textDecoration || undefined,
-    lineHeight:     props.lineHeight    || undefined,
+    fontWeight:     scalar(props.fontWeight) || undefined,
+    fontFamily:     scalar(props.fontFamily) || undefined,
+    fontStyle:      scalar(props.fontStyle) || undefined,
+    textAlign:      scalar(props.textAlign) || undefined,
+    textTransform:  scalar(props.textTransform) || undefined,
+    textDecoration: scalar(props.textDecoration) || undefined,
+    lineHeight:     scalar(props.lineHeight) || undefined,
     letterSpacing:  px(props.letterSpacing),
     wordSpacing:    px(props.wordSpacing),
     // Border
@@ -279,37 +255,37 @@ export const buildStyle = (props) => {
     borderBottomLeftRadius:  px(props.borderBottomLeftRadius),
     borderBottomRightRadius: px(props.borderBottomRightRadius),
     borderWidth:    px(props.borderWidth),
-    borderColor:    props.borderColor   || undefined,
-    borderStyle:    props.borderStyle   || undefined,
+    borderColor:    scalar(props.borderColor) || undefined,
+    borderStyle:    scalar(props.borderStyle) || undefined,
     // Layout
-    display:              props.display              || undefined,
-    flexDirection:        props.flexDirection        || undefined,
-    alignItems:           props.alignItems           || undefined,
-    justifyContent:       props.justifyContent       || undefined,
-    flexWrap:             props.flexWrap             || undefined,
+    display:              scalar(props.display) || undefined,
+    flexDirection:        scalar(props.flexDirection) || undefined,
+    alignItems:           scalar(props.alignItems) || undefined,
+    justifyContent:       scalar(props.justifyContent) || undefined,
+    flexWrap:             scalar(props.flexWrap) || undefined,
     gap:                  px(props.gap),
-    gridTemplateColumns:  props.gridTemplateColumns  || undefined,
-    width:                props.width                || undefined,
-    maxWidth:             props.maxWidth             || undefined,
-    minWidth:             props.minWidth             || undefined,
-    height:               props.height               || undefined,
-    maxHeight:            props.maxHeight            || undefined,
-    minHeight:            props.minHeight            || undefined,
-    overflow:             props.overflow             || undefined,
-    overflowX:            props.overflowX            || undefined,
-    overflowY:            props.overflowY            || undefined,
+    gridTemplateColumns:  scalar(props.gridTemplateColumns) || undefined,
+    width:                scalar(props.width) || undefined,
+    maxWidth:             scalar(props.maxWidth) || undefined,
+    minWidth:             scalar(props.minWidth) || undefined,
+    height:               scalar(props.height) || undefined,
+    maxHeight:            scalar(props.maxHeight) || undefined,
+    minHeight:            scalar(props.minHeight) || undefined,
+    overflow:             scalar(props.overflow) || undefined,
+    overflowX:            scalar(props.overflowX) || undefined,
+    overflowY:            scalar(props.overflowY) || undefined,
     // Position
-    position: props.position !== "static" ? props.position : undefined,
-    top:      props.top    || undefined,
-    right:    props.right  || undefined,
-    bottom:   props.bottom || undefined,
-    left:     props.left   || undefined,
-    zIndex:   props.zIndex || undefined,
+    position: scalar(props.position) !== "static" ? scalar(props.position) : undefined,
+    top:      scalar(props.top) || undefined,
+    right:    scalar(props.right) || undefined,
+    bottom:   scalar(props.bottom) || undefined,
+    left:     scalar(props.left) || undefined,
+    zIndex:   scalar(props.zIndex) || undefined,
     // Effects
-    opacity:    props.opacity    !== undefined ? props.opacity    : undefined,
-    boxShadow:  props.boxShadow  || undefined,
-    cursor:     props.cursor     || undefined,
-    transition: props.transition || undefined,
+    opacity:    scalar(props.opacity) !== undefined ? scalar(props.opacity) : undefined,
+    boxShadow:  scalar(props.boxShadow) || undefined,
+    cursor:     scalar(props.cursor) || undefined,
+    transition: scalar(props.transition) || undefined,
   };
 };
 
@@ -326,3 +302,84 @@ export const Overlay = ({ color }) =>
       }}
     />
   ) : null;
+
+
+  const PROP_CSS_MAP = {
+  // Spacing
+  paddingTop:    (v) => `padding-top: ${v}px;`,
+  paddingBottom: (v) => `padding-bottom: ${v}px;`,
+  paddingLeft:   (v) => `padding-left: ${v}px;`,
+  paddingRight:  (v) => `padding-right: ${v}px;`,
+  marginTop:     (v) => `margin-top: ${v}px;`,
+  marginBottom:  (v) => `margin-bottom: ${v}px;`,
+  marginLeft:    (v) => `margin-left: ${v}px;`,
+  marginRight:   (v) => `margin-right: ${v}px;`,
+  // Typography
+  color:          (v) => `color: ${v};`,
+  fontSize:       (v) => `font-size: ${v}px;`,
+  fontWeight:     (v) => `font-weight: ${v};`,
+  fontFamily:     (v) => `font-family: ${v};`,
+  fontStyle:      (v) => `font-style: ${v};`,
+  textAlign:      (v) => `text-align: ${v};`,
+  textTransform:  (v) => `text-transform: ${v};`,
+  textDecoration: (v) => `text-decoration: ${v};`,
+  lineHeight:     (v) => `line-height: ${v};`,
+  letterSpacing:  (v) => `letter-spacing: ${v}px;`,
+  wordSpacing:    (v) => `word-spacing: ${v}px;`,
+  // Background
+  backgroundColor:    (v) => `background-color: ${v};`,
+  backgroundImage:    (v) => {
+    const val = v.startsWith("url(") || v.includes("gradient") ? v : `url(${v})`;
+    return `background-image: ${val};`;
+  },
+  backgroundSize:     (v) => `background-size: ${v};`,
+  backgroundPosition: (v) => `background-position: ${v};`,
+  backgroundRepeat:   (v) => `background-repeat: ${v};`,
+  // Border
+  borderRadius:            (v) => `border-radius: ${v}px;`,
+  borderTopLeftRadius:     (v) => `border-top-left-radius: ${v}px;`,
+  borderTopRightRadius:    (v) => `border-top-right-radius: ${v}px;`,
+  borderBottomLeftRadius:  (v) => `border-bottom-left-radius: ${v}px;`,
+  borderBottomRightRadius: (v) => `border-bottom-right-radius: ${v}px;`,
+  borderWidth:  (v) => `border-width: ${v}px;`,
+  borderColor:  (v) => `border-color: ${v};`,
+  borderStyle:  (v) => `border-style: ${v};`,
+  // Layout
+  display:             (v) => `display: ${v};`,
+  flexDirection:       (v) => `flex-direction: ${v};`,
+  alignItems:          (v) => `align-items: ${v};`,
+  justifyContent:      (v) => `justify-content: ${v};`,
+  flexWrap:            (v) => `flex-wrap: ${v};`,
+  gap:                 (v) => `gap: ${v}px;`,
+  gridTemplateColumns: (v) => `grid-template-columns: ${v};`,
+  width:               (v) => `width: ${v};`,
+  maxWidth:            (v) => `max-width: ${v};`,
+  minWidth:            (v) => `min-width: ${v};`,
+  height:              (v) => `height: ${v};`,
+  maxHeight:           (v) => `max-height: ${v};`,
+  minHeight:           (v) => `min-height: ${v};`,
+  overflow:            (v) => `overflow: ${v};`,
+  overflowX:           (v) => `overflow-x: ${v};`,
+  overflowY:           (v) => `overflow-y: ${v};`,
+  // Position
+  position: (v) => v !== "static" ? `position: ${v};` : null,
+  top:      (v) => `top: ${v};`,
+  right:    (v) => `right: ${v};`,
+  bottom:   (v) => `bottom: ${v};`,
+  left:     (v) => `left: ${v};`,
+  zIndex:   (v) => `z-index: ${v};`,
+  // Effects
+  opacity:    (v) => `opacity: ${v};`,
+  boxShadow:  (v) => `box-shadow: ${v};`,
+  cursor:     (v) => `cursor: ${v};`,
+  transition: (v) => `transition: ${v};`,
+};
+
+export function buildFullResponsiveCss(selector, props) {
+  return buildResponsiveCss(selector, props, (propName, value) => {
+    const fn = PROP_CSS_MAP[propName];
+    if (!fn) return null;
+    const result = fn(value);
+    return result || null;
+  });
+}
