@@ -79,8 +79,6 @@ export const uploadProduct = createAsyncThunk(
 export const getAllProducts = createAsyncThunk(
   "product/getallProduct",
   async (_, { rejectWithValue }) => {
-    console.log("THUNK HIT");
-    console.log(import.meta.env.VITE_BACKEND_URI + "" + ALL_PRODUCT);
     try {
       const data = await api.get(ALL_PRODUCT);
       console.log(data);
